@@ -1,0 +1,37 @@
+{
+  "name": "@saltcorn/bootstrap-prompt-theme",
+  "version": "0.1.0",
+  "description": "Bootstrap 5 layout plugin with LLM-generated CSS overlay",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "dependencies": {
+    "@saltcorn/markup": "^0.1.2",
+    "@saltcorn/data": "^0.1.2"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "jest": "^25.1.0"
+  },
+  "jest": {
+    "testEnvironment": "node"
+  },
+  "eslintConfig": {
+    "extends": "eslint:recommended",
+    "parserOptions": {
+      "ecmaVersion": 2020
+    },
+    "env": {
+      "node": true,
+      "es6": true
+    },
+    "rules": {
+      "no-unused-vars": "off",
+      "no-case-declarations": "off",
+      "no-empty": "warn",
+      "no-fallthrough": "warn"
+    }
+  }
+}
