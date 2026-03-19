@@ -46,11 +46,12 @@ DARK MODE STRUCTURE:
 /* any extra component rules needed only in dark mode, prefixed with [data-bs-theme="dark"] */
 
 CRITICAL RULES — never break these:
-- Never set overflow:hidden on .navbar, .navbar-collapse, or any nav container — this clips dropdown menus
-- Never set a z-index lower than 1000 on .navbar or its children — dropdowns must appear above page content
-- Never create a new stacking context (transform, filter, will-change, isolation) on .navbar or its direct parents — this traps dropdowns inside it
-- Do not override --bs-zindex-dropdown or .dropdown-menu z-index
-- Navbar dropdowns must always be fully visible and appear above all other page content
+- Never set overflow:hidden or overflow:clip on ANY element — not on .navbar, .card, .card-body, .card-header, .card-footer, section, #wrapper, #page-inner-content, #content-wrapper, .container, .page-section, or any other element. Bootstrap's Popper.js positions dropdowns with position:absolute outside their parent bounds; overflow:hidden on any ancestor will clip them.
+- Always set .navbar { position: relative; z-index: 1030; } to ensure navbar dropdowns render above all page content.
+- Never apply transform, filter, backdrop-filter, will-change, or perspective to .card, .card-body, .card-header, .card-footer, .container, .page-section, section, #wrapper, or any page-level container. These CSS properties create a new stacking context that can rise above the navbar and obscure its open dropdowns.
+- Never set z-index on .card or page content elements — stacking context on page content is what causes navbar dropdowns to be obscured.
+- Do not override --bs-zindex-dropdown, --bs-zindex-fixed, or .dropdown-menu z-index.
+- Dropdowns must always be fully visible and on top of all other page content, including cards, sections, and containers.
 
 OUTPUT: Only valid CSS. No explanations. No markdown. No code fences. Start directly with /* theme comment */ or :root {`;
 
