@@ -1,6 +1,6 @@
 {
   "name": "@saltcorn/bootstrap-prompt-theme",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Bootstrap 5 layout plugin with LLM-generated CSS overlay",
   "main": "index.js",
   "scripts": {
