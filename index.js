@@ -561,25 +561,19 @@ const configuration_workflow = () =>
       };
     },
     onStepSuccess: async (step, ctx) => {
-      if (!ctx.prompt) return;
-      if (ctx.prompt === ctx.context?.prompt) return;
+      const prompt = ctx?.prompt;
+      if (!prompt) return;
       try {
-        const css = await generateThemeCSS(ctx.prompt);
+        let plugin = await Plugin.findOne({ name: "bootstrap-prompt-theme" });
+        if (!plugin)
+          plugin = await Plugin.findOne({ name: "@saltcorn/bootstrap-prompt-theme" });
+        if (plugin?.configuration?.last_applied_prompt === prompt) return;
+        const css = await generateThemeCSS(prompt);
         if (css) {
           ctx.overlay_css = css;
+          ctx.last_applied_prompt = prompt;
           const filename = await writeOverlayCSS(css);
           ctx.overlay_file = filename;
-          let plugin = await Plugin.findOne({ name: "bootstrap-prompt-theme" });
-          if (!plugin)
-            plugin = await Plugin.findOne({ name: "@saltcorn/bootstrap-prompt-theme" });
-          if (plugin) {
-            plugin.configuration = {
-              ...(plugin.configuration || {}),
-              overlay_css: css,
-              overlay_file: filename,
-            };
-            await plugin.upsert();
-          }
         }
       } catch (error) {
         console.error("bootstrap-prompt-theme: LLM call failed:", error.message);
