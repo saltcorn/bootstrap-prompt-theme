@@ -17,6 +17,8 @@ This variant generates a lightweight CSS overlay on top of the Bootstrap 5.3 CSS
 
 - Saltcorn with the `@saltcorn/large-language-model` plugin installed and configured
 
+> **Model recommendation:** Good results have been achieved with `@saltcorn/large-language-model` configured to use **GPT-5.4**.
+
 ## Configuration
 
 1. Go to **Plugins → bootstrap-prompt-theme → Configure**
