@@ -57,7 +57,8 @@ OUTPUT: Only valid CSS. No explanations. No markdown. No code fences. Start dire
 const generateThemeCSS = async (prompt) => {
   const state = getState();
   if (!state.functions?.llm_generate) {
-    console.log(
+    state.log(
+      5,
       "bootstrap-prompt-theme: llm_generate not available, is large-language-model installed?"
     );
     return null;
@@ -66,8 +67,8 @@ const generateThemeCSS = async (prompt) => {
   const result = await state.functions.llm_generate.run(prompt, {
     systemPrompt: SYSTEM_PROMPT,
   });
-  console.log("bootstrap-prompt-theme: LLM result:", result);
+  state.log(6, `bootstrap-prompt-theme: LLM result: ${result}`);
   return result || null;
 };
- 
+
 module.exports = { generateThemeCSS, writeOverlayCSS, deleteOldOverlays };

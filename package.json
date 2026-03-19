@@ -10,7 +10,7 @@
     "@saltcorn/markup": "^0.1.2",
     "@saltcorn/data": "^0.1.2"
   },
-  "author": "",
+  "author": "Christian Hugo",
   "license": "MIT",
   "devDependencies": {
     "jest": "^25.1.0"

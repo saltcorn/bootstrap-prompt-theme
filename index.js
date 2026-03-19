@@ -35,7 +35,11 @@ const {
   headersInBody,
 } = require("@saltcorn/markup/layout_utils");
 const { features, getState } = require("@saltcorn/data/db/state");
-const { generateThemeCSS, writeOverlayCSS, deleteOldOverlays } = require("./generate_theme");
+const {
+  generateThemeCSS,
+  writeOverlayCSS,
+  deleteOldOverlays,
+} = require("./generate_theme");
 
 const isNode = typeof window === "undefined";
 let hasCapacitor = false;
@@ -149,7 +153,9 @@ const wrapIt = (config, bodyAttr, headers, title, body) => {
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <link href="${base_public_serve}/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="${base_public_serve}/sidebar-3.css" />
-    <link rel="stylesheet" href="${base_public_serve}/${config.overlay_file || "overlay.css"}" />
+    <link rel="stylesheet" href="${base_public_serve}/${
+    config.overlay_file || "overlay.css"
+  }" />
     ${headersInHead(headers, config?.mode === "dark")}
     <title>${text(title)}</title>
   </head>
@@ -548,7 +554,6 @@ const formModify = (form) => {
   return form;
 };
 
-
 const configuration_workflow = () =>
   new Workflow({
     onDone: async (context) => {
@@ -566,7 +571,9 @@ const configuration_workflow = () =>
       try {
         let plugin = await Plugin.findOne({ name: "bootstrap-prompt-theme" });
         if (!plugin)
-          plugin = await Plugin.findOne({ name: "@saltcorn/bootstrap-prompt-theme" });
+          plugin = await Plugin.findOne({
+            name: "@saltcorn/bootstrap-prompt-theme",
+          });
         if (plugin?.configuration?.last_applied_prompt === prompt) return;
         const css = await generateThemeCSS(prompt);
         if (css) {
@@ -576,7 +583,8 @@ const configuration_workflow = () =>
           ctx.overlay_file = filename;
         }
       } catch (error) {
-        console.error("bootstrap-prompt-theme: LLM call failed:", error.message);
+        const msg = error.message || "unknown error";
+        getState().log(2, `bootstrap-prompt-theme onLoad failed: ${msg}`);
       }
     },
     steps: [
@@ -677,11 +685,17 @@ module.exports = {
   configuration_workflow,
   onLoad: async (configuration) => {
     if (!configuration?.overlay_css) {
-      getState().log(5, "bootstrap-prompt-theme onLoad: no overlay_css in configuration");
+      getState().log(
+        5,
+        "bootstrap-prompt-theme onLoad: no overlay_css in configuration"
+      );
       return;
     }
     if (!configuration?.overlay_file) {
-      getState().log(5, "bootstrap-prompt-theme onLoad: no overlay_file in configuration");
+      getState().log(
+        5,
+        "bootstrap-prompt-theme onLoad: no overlay_file in configuration"
+      );
       return;
     }
     try {
@@ -691,7 +705,10 @@ module.exports = {
       try {
         await access(dest);
       } catch {
-        await writeOverlayCSS(configuration.overlay_css, configuration.overlay_file);
+        await writeOverlayCSS(
+          configuration.overlay_css,
+          configuration.overlay_file
+        );
       }
     } catch (error) {
       const msg = error.message || "Failed to write overlay CSS";
