@@ -1,3 +1,6 @@
+const Plugin = require("@saltcorn/data/models/plugin");
+const { pre, code, div } = require("@saltcorn/markup/tags");
+const db = require("@saltcorn/data/db");
 const { getState } = require("@saltcorn/data/db/state");
 const { join } = require("path");
 const { writeFile, readdir, unlink } = require("fs").promises;
@@ -55,21 +58,85 @@ CRITICAL RULES — never break these:
 
 OUTPUT: Only valid CSS. No explanations. No markdown. No code fences. Start directly with /* theme comment */ or :root {`;
 
-const generateThemeCSS = async (prompt) => {
-  const state = getState();
-  if (!state.functions?.llm_generate) {
-    state.log(
-      5,
-      "bootstrap-prompt-theme: llm_generate not available, is large-language-model installed?"
-    );
-    return null;
-  }
-  console.log("bootstrap-prompt-theme: generating theme from prompt...");
-  const result = await state.functions.llm_generate.run(prompt, {
-    systemPrompt: SYSTEM_PROMPT,
-  });
-  state.log(6, `bootstrap-prompt-theme: LLM result: ${result}`);
-  return result || null;
-};
+class GenerateBootstrapThemeSkill {
+  static skill_name = "Generate Bootstrap Theme";
 
-module.exports = { generateThemeCSS, writeOverlayCSS, deleteOldOverlays };
+  get skill_label() {
+    return "Bootstrap Theme";
+  }
+
+  constructor(cfg) {
+    Object.assign(this, cfg);
+  }
+
+  static async configFields() {
+    return [];
+  }
+
+  systemPrompt() {
+    return SYSTEM_PROMPT;
+  }
+
+  provideTools() {
+    return [
+      {
+        type: "function",
+        renderToolCall({ css }) {
+          return pre(
+            code(css.slice(0, 300) + (css.length > 300 ? "\n..." : ""))
+          );
+        },
+        process: async ({ css }) => {
+          const filename = await writeOverlayCSS(css);
+          let plugin = await Plugin.findOne({ name: "bootstrap-prompt-theme" });
+          if (!plugin)
+            plugin = await Plugin.findOne({
+              name: "@saltcorn/bootstrap-prompt-theme",
+            });
+          if (plugin) {
+            plugin.configuration = {
+              ...(plugin.configuration || {}),
+              overlay_css: css,
+              overlay_file: filename,
+            };
+            await plugin.upsert();
+            getState().processSend({
+              refresh_plugin_cfg: plugin.name,
+              tenant: db.getTenantSchema(),
+            });
+            await deleteOldOverlays(filename);
+          }
+          return { filename };
+        },
+        renderToolResponse: async ({ filename }) => {
+          return div(
+            { class: "text-success" },
+            `CSS overlay applied: ${filename}`
+          );
+        },
+        function: {
+          name: "apply_css_overlay",
+          description:
+            "Apply a CSS overlay on top of Bootstrap 5.3 to restyle the Saltcorn UI. Call this only when you have CSS ready to apply — not for questions or clarifications.",
+          parameters: {
+            type: "object",
+            required: ["css"],
+            properties: {
+              css: {
+                type: "string",
+                description:
+                  "Complete valid CSS to write as the overlay. Must start with :root { or a comment. No markdown, no code fences.",
+              },
+            },
+          },
+        },
+      },
+    ];
+  }
+}
+
+module.exports = {
+  GenerateBootstrapThemeSkill,
+  writeOverlayCSS,
+  deleteOldOverlays,
+};
