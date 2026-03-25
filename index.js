@@ -716,6 +716,7 @@ const configuration_workflow = () =>
               {
                 headerTag: `<script>
 async function bptResetTheme() {
+  if (!confirm('Reset theme? This will remove the current CSS overlay and conversation.')) return;
   await fetch('/bootstrap-prompt-theme/reset-theme', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'CSRF-Token': _sc_globalCsrf },
@@ -779,6 +780,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const inp = document.getElementById('bpt-input');
   inp?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); bptSend(); }
+  });
+  const submitBtn = form?.querySelector('[type="submit"]');
+  const origSubmitHTML = submitBtn ? submitBtn.innerHTML : null;
+  if (form) form.addEventListener('submit', (e) => {
+    const draft = document.getElementById('bpt-input')?.value?.trim();
+    if (draft && !confirm('You have an unsent message. Finish without sending it?')) {
+      e.preventDefault();
+      if (submitBtn && origSubmitHTML !== null) {
+        setTimeout(() => {
+          submitBtn.innerHTML = origSubmitHTML;
+          submitBtn.disabled = false;
+          submitBtn.removeAttribute('disabled');
+        }, 100);
+      }
+    }
   });
 });
 </script>`,

@@ -56,7 +56,9 @@ CRITICAL RULES — never break these:
 - Do not override --bs-zindex-dropdown, --bs-zindex-fixed, or .dropdown-menu z-index.
 - Dropdowns must always be fully visible and on top of all other page content, including cards, sections, and containers.
 
-OUTPUT: Only valid CSS. No explanations. No markdown. No code fences. Start directly with /* theme comment */ or :root {`;
+WORKFLOW:
+1. Call apply_css_overlay with the complete CSS — this is the only way to deliver CSS.
+2. After the tool call, reply with one short sentence confirming what changed (e.g. "Applied a red rounded theme."). Never include CSS in your text reply.`;
 
 class GenerateBootstrapThemeSkill {
   static skill_name = "Generate Bootstrap Theme";
