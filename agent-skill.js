@@ -58,9 +58,36 @@ CRITICAL RULES — never break these:
 
 IMAGES: The user may attach images to the conversation. Use them as design inspiration — extract colors, typography style, spacing feel, or overall mood and translate that into the CSS overlay. If the user attaches an image without further instruction, derive a theme from it. If they describe what they want alongside the image, use the image to inform the details.
 
+LAYOUT CONFIG: Besides CSS, you can control structural layout options via set_layout_config:
+- mode: "light" | "dark" — Bootstrap color mode applied to <html data-bs-theme>
+- menu_style: "Top Navbar" | "Side Navbar" | "No Menu"
+- colorscheme: navbar color class pair, e.g. "navbar-dark bg-dark", "navbar-light bg-light", "navbar-dark bg-primary"
+- fixed_top: true | false — fix navbar to top of viewport
+- fluid: true | false — full-width container vs fixed-width
+- top_pad: 0–5 — Bootstrap spacing scale for top padding on page sections
+- in_card: true | false — wrap page body in a Bootstrap card
+Only call set_layout_config when you want to change structural layout, separate from CSS. Call both tools when a request requires both structural and CSS changes.
+
 WORKFLOW:
 1. Call apply_css_overlay with the complete CSS — this is the only way to deliver CSS.
-2. After the tool call, reply with one short sentence confirming what changed (e.g. "Applied a red rounded theme."). Never include CSS in your text reply.`;
+2. Optionally call set_layout_config for structural layout changes.
+3. After all tool calls, reply with one short sentence confirming what changed. Never include CSS in your text reply.`;
+
+const findPlugin = async () => {
+  return (
+    (await Plugin.findOne({ name: "bootstrap-prompt-theme" })) ||
+    (await Plugin.findOne({ name: "@saltcorn/bootstrap-prompt-theme" }))
+  );
+};
+
+const savePluginConfig = async (plugin, patch) => {
+  plugin.configuration = { ...(plugin.configuration || {}), ...patch };
+  await plugin.upsert();
+  getState().processSend({
+    refresh_plugin_cfg: plugin.name,
+    tenant: db.getTenantSchema(),
+  });
+};
 
 class GenerateBootstrapThemeSkill {
   static skill_name = "Generate Bootstrap Theme";
@@ -92,21 +119,11 @@ class GenerateBootstrapThemeSkill {
         },
         process: async ({ css }) => {
           const filename = await writeOverlayCSS(css);
-          let plugin = await Plugin.findOne({ name: "bootstrap-prompt-theme" });
-          if (!plugin)
-            plugin = await Plugin.findOne({
-              name: "@saltcorn/bootstrap-prompt-theme",
-            });
+          const plugin = await findPlugin();
           if (plugin) {
-            plugin.configuration = {
-              ...(plugin.configuration || {}),
+            await savePluginConfig(plugin, {
               overlay_css: css,
               overlay_file: filename,
-            };
-            await plugin.upsert();
-            getState().processSend({
-              refresh_plugin_cfg: plugin.name,
-              tenant: db.getTenantSchema(),
             });
             await deleteOldOverlays(filename);
           }
@@ -130,6 +147,83 @@ class GenerateBootstrapThemeSkill {
                 type: "string",
                 description:
                   "Complete valid CSS to write as the overlay. Must start with :root { or a comment. No markdown, no code fences.",
+              },
+            },
+          },
+        },
+      },
+      {
+        type: "function",
+        renderToolCall(params) {
+          const entries = Object.entries(params)
+            .filter(([, v]) => v !== undefined)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(", ");
+          return pre(code(entries));
+        },
+        process: async (params) => {
+          const plugin = await findPlugin();
+          if (plugin) {
+            const allowed = [
+              "mode",
+              "menu_style",
+              "colorscheme",
+              "fixed_top",
+              "fluid",
+              "top_pad",
+              "in_card",
+            ];
+            const patch = Object.fromEntries(
+              Object.entries(params).filter(([k]) => allowed.includes(k))
+            );
+            await savePluginConfig(plugin, patch);
+          }
+          return { success: true };
+        },
+        renderToolResponse: async () =>
+          div({ class: "text-success" }, "Layout configuration updated."),
+        function: {
+          name: "set_layout_config",
+          description:
+            "Set structural layout configuration for the Saltcorn UI. Only pass the parameters you want to change.",
+          parameters: {
+            type: "object",
+            properties: {
+              mode: {
+                type: "string",
+                enum: ["light", "dark"],
+                description:
+                  "Bootstrap color mode applied to <html data-bs-theme>",
+              },
+              menu_style: {
+                type: "string",
+                enum: ["Top Navbar", "Side Navbar", "No Menu"],
+                description: "Navigation menu style",
+              },
+              colorscheme: {
+                type: "string",
+                description:
+                  "Navbar color class pair, e.g. 'navbar-dark bg-dark', 'navbar-light bg-light', 'navbar-dark bg-primary'",
+              },
+              fixed_top: {
+                type: "boolean",
+                description: "Fix the navbar to the top of the viewport",
+              },
+              fluid: {
+                type: "boolean",
+                description:
+                  "Use a full-width container instead of fixed-width",
+              },
+              top_pad: {
+                type: "integer",
+                minimum: 0,
+                maximum: 5,
+                description:
+                  "Top padding for page sections (Bootstrap spacing scale 0–5)",
+              },
+              in_card: {
+                type: "boolean",
+                description: "Wrap page body content in a Bootstrap card",
               },
             },
           },

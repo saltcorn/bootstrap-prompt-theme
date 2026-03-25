@@ -67,6 +67,13 @@ const resetThemeRoute = async (req, res) => {
         overlay_css: null,
         overlay_file: null,
         chat_run_id: null,
+        mode: null,
+        menu_style: null,
+        colorscheme: null,
+        fixed_top: null,
+        fluid: null,
+        top_pad: null,
+        in_card: null,
       };
       await plugin.upsert();
       getState().processSend({
@@ -232,16 +239,19 @@ const blockDispatch = (config) => ({
     }`)
     ),
   noBackgroundAtTop: () => true,
-  wrapTop: (segment, ix, s) =>
-    ["hero", "footer"].includes(segment.type) || segment.noWrapTop
+  wrapTop: (segment, ix, s) => {
+    const topPad = config.top_pad ?? DEFAULT_TOP_PAD;
+    const fixedTop = config.fixed_top ?? DEFAULT_FIXED_TOP;
+    const fluid = config.fluid ?? DEFAULT_FLUID;
+    return ["hero", "footer"].includes(segment.type) || segment.noWrapTop
       ? s
       : section(
           {
             class: [
               "page-section",
-              ix === 0 && `pt-${DEFAULT_TOP_PAD}`,
-              ix === 0 && DEFAULT_FIXED_TOP && isNode && "mt-5",
-              ix === 0 && DEFAULT_FIXED_TOP && !isNode && "mt-6",
+              ix === 0 && `pt-${topPad}`,
+              ix === 0 && fixedTop && isNode && "mt-5",
+              ix === 0 && fixedTop && !isNode && "mt-6",
               segment.class,
               segment.invertColor && "bg-primary",
             ],
@@ -252,10 +262,11 @@ const blockDispatch = (config) => ({
             }`,
           },
           div(
-            { class: [DEFAULT_FLUID ? "container-fluid" : "container"] },
+            { class: [fluid ? "container-fluid" : "container"] },
             segment.textStyle && segment.textStyle === "h1" ? h1(s) : s
           )
-        ),
+        );
+  },
 });
 
 const buildHints = (config = {}) => ({
@@ -268,7 +279,7 @@ const renderBody = (title, body, alerts, config, role, req) =>
     role,
     req,
     layout:
-      typeof body === "string" && DEFAULT_IN_CARD
+      typeof body === "string" && (config.in_card ?? DEFAULT_IN_CARD)
         ? { type: "card", title, contents: body }
         : body,
     alerts,
@@ -288,7 +299,7 @@ const base_public_serve = `${linkPrefix()}/public/bootstrap-prompt-theme${
 
 const wrapIt = (config, bodyAttr, headers, title, body) => {
   return `<!doctype html>
-<html lang="en" data-bs-theme="${DEFAULT_MODE}">
+<html lang="en" data-bs-theme="${config.mode || DEFAULT_MODE}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -313,7 +324,11 @@ const wrapIt = (config, bodyAttr, headers, title, body) => {
   }/jquery-3.6.0.min.js"></script>
     <script src="${base_public_serve}/bootstrap.bundle.min.js"></script>
     ${headersInBody(headers)}
-    ${DEFAULT_COLORSCHEME === "navbar-light" ? navbarSolidOnScroll : ""}
+    ${
+      (config.colorscheme || DEFAULT_COLORSCHEME) === "navbar-light"
+        ? navbarSolidOnScroll
+        : ""
+    }
   </body>
 </html>`;
 };
@@ -517,7 +532,10 @@ const menuWrap = ({
   body,
   req,
 }) => {
-  const colschm = DEFAULT_COLORSCHEME.split(" ");
+  const colorscheme = config.colorscheme || DEFAULT_COLORSCHEME;
+  const menuStyle = config.menu_style || DEFAULT_MENU_STYLE;
+  const fixedTop = config.fixed_top ?? DEFAULT_FIXED_TOP;
+  const colschm = colorscheme.split(" ");
   const navbarCol = colschm[0];
   const bg = colschm[1];
   const txt = (colschm[0] || "").includes("dark") ? "text-light" : "";
@@ -526,14 +544,14 @@ const menuWrap = ({
     ? mobileBottomNavBar(currentUrl, menu, bg, txt)
     : "";
   const role = !req ? 1 : req.user ? req.user.role_id : 100;
-  if ((DEFAULT_MENU_STYLE === "No Menu" && role > 1) || (!menu && !brand))
+  if ((menuStyle === "No Menu" && role > 1) || (!menu && !brand))
     return div({ id: "wrapper" }, div({ id: "page-inner-content" }, body));
-  else if (DEFAULT_MENU_STYLE === "Side Navbar" && isNode) {
+  else if (menuStyle === "Side Navbar" && isNode) {
     return (
       navbar(brand, menu, currentUrl, {
         class: "d-md-none",
-        colorscheme: DEFAULT_COLORSCHEME,
-        fixedTop: DEFAULT_FIXED_TOP,
+        colorscheme,
+        fixedTop,
       }) +
       div(
         { id: "wrapper", class: "d-flex with-sidebar" },
@@ -560,10 +578,7 @@ const menuWrap = ({
     return (
       div(
         { id: "wrapper" },
-        navbar(brand, menu, currentUrl, {
-          colorscheme: DEFAULT_COLORSCHEME,
-          fixedTop: DEFAULT_FIXED_TOP,
-        }),
+        navbar(brand, menu, currentUrl, { colorscheme, fixedTop }),
         div({ id: "page-inner-content" }, body)
       ) + mobileNav
     );
