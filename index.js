@@ -29,6 +29,7 @@ const Form = require("@saltcorn/data/models/form");
 const Workflow = require("@saltcorn/data/models/workflow");
 const Plugin = require("@saltcorn/data/models/plugin");
 const WorkflowRun = require("@saltcorn/data/models/workflow_run");
+const File = require("@saltcorn/data/models/file");
 const { renderForm, link } = require("@saltcorn/markup");
 const {
   alert,
@@ -87,7 +88,7 @@ const chatRoute = async (req, res) => {
   if (!req.user) return res.status(403).json({ error: "Not authenticated" });
   try {
     const { userinput, run_id } = req.body;
-    if (!userinput?.trim())
+    if (!userinput?.trim() && !req.files?.file)
       return res.json({
         success: "ok",
         response: "",
@@ -100,10 +101,12 @@ const chatRoute = async (req, res) => {
     if (!agentsLocation)
       return res.json({ error: "Agents plugin not available" });
     const { join } = require("path");
-    const { process_interaction, addToContext, wrapSegment } = require(join(
-      agentsLocation,
-      "common.js"
-    ));
+    const {
+      process_interaction,
+      addToContext,
+      wrapSegment,
+      saveInteractions,
+    } = require(join(agentsLocation, "common.js"));
 
     const agentConfig = {
       skills: [{ skill_type: "Generate Bootstrap Theme" }],
@@ -137,11 +140,31 @@ const chatRoute = async (req, res) => {
       run = await WorkflowRun.findOne({ id: +run_id });
     }
 
-    const userMsg = wrapSegment(`<p>${userinput}</p>`, "You", true);
+    if (req.files?.file) {
+      const rawFiles = Array.isArray(req.files.file)
+        ? req.files.file
+        : [req.files.file];
+      run.context.interactions = run.context.interactions || [];
+      for (const rawFile of rawFiles) {
+        const file = await File.from_req_files(rawFile, req.user?.id, 100);
+        const b64 = await file.get_contents("base64");
+        const imageurl = `data:${file.mimetype};base64,${b64}`;
+        await getState().functions.llm_add_message.run("image", imageurl, {
+          chat: run.context.interactions,
+        });
+      }
+      await saveInteractions(run);
+    }
+
+    const userMsg = wrapSegment(
+      `<p>${userinput || "(image)"}</p>`,
+      "You",
+      true
+    );
     await addToContext(run, {
       interactions: [
         ...(run.context.interactions || []),
-        { role: "user", content: userinput },
+        ...(userinput?.trim() ? [{ role: "user", content: userinput }] : []),
       ],
       html_interactions: [userMsg],
     });
@@ -715,6 +738,32 @@ const configuration_workflow = () =>
             additionalHeaders: [
               {
                 headerTag: `<script>
+window._bptDT = new DataTransfer();
+function bptSetFiles(files) {
+  for (const f of files) window._bptDT.items.add(f);
+  document.getElementById('bpt-file-input').files = window._bptDT.files;
+  bptUpdateFileLabel();
+}
+function bptUpdateFileLabel() {
+  const n = window._bptDT.files.length;
+  const el = document.getElementById('bpt-file-label');
+  if (!el) return;
+  if (n === 0) { el.innerHTML = ''; }
+  else {
+    const txt = n === 1 ? window._bptDT.files[0].name : n + ' files';
+    el.innerHTML = '<span class="text-muted">' + txt + '</span> <span class="badge text-bg-secondary" style="cursor:pointer;font-size:.65em" onclick="bptClearFiles()" title="Remove">&times;</span>';
+  }
+}
+function bptClearFiles() {
+  window._bptDT.items.clear();
+  const fi = document.getElementById('bpt-file-input');
+  if (fi) fi.value = '';
+  bptUpdateFileLabel();
+}
+function bptFileAttach(e) {
+  window._bptDT.items.clear();
+  bptSetFiles(e.target.files);
+}
 async function bptResetTheme() {
   if (!confirm('Reset theme? This will remove the current CSS overlay and conversation.')) return;
   await fetch('/bootstrap-prompt-theme/reset-theme', {
@@ -730,18 +779,34 @@ async function bptSend() {
   const runIdInput = document.getElementById('bpt-run-id');
   const sendBtn = document.getElementById('bpt-send-btn');
   const sendIcon = document.getElementById('bpt-send-icon');
+  const fileInput = document.getElementById('bpt-file-input');
   const msg = input.value.trim();
-  if (!msg || sendBtn.disabled) return;
-  interactions.innerHTML += '<div class="interaction-segment to-right"><div><div class="badgewrap"><span class="badge bg-secondary">You</span></div><p>' + msg.replace(/</g, '&lt;') + '</p></div></div>';
+  const hasFiles = fileInput?.files?.length > 0;
+  if ((!msg && !hasFiles) || sendBtn.disabled) return;
+  let fileHtml = '';
+  if (hasFiles) {
+    fileHtml = Array.from(fileInput.files).map(f => {
+      const url = URL.createObjectURL(f);
+      return '<img src="' + url + '" style="max-height:60px;max-width:80px;border-radius:4px;margin-top:4px;" alt="' + f.name + '">';
+    }).join(' ');
+  }
+  interactions.innerHTML += '<div class="interaction-segment to-right"><div><div class="badgewrap"><span class="badge bg-secondary">You</span></div>' + (msg ? '<p>' + msg.replace(/</g, '&lt;') + '</p>' : '') + fileHtml + '</div></div>';
   interactions.scrollTop = interactions.scrollHeight;
   input.value = '';
   sendBtn.disabled = true;
   sendIcon.className = 'fas fa-spinner fa-spin';
+  const fd = new FormData();
+  fd.append('userinput', msg);
+  fd.append('run_id', runIdInput.value);
+  if (hasFiles) {
+    Array.from(fileInput.files).forEach(f => fd.append('file', f));
+    bptClearFiles();
+  }
   try {
     const resp = await fetch('/bootstrap-prompt-theme/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'CSRF-Token': _sc_globalCsrf },
-      body: JSON.stringify({ userinput: msg, run_id: runIdInput.value })
+      headers: { 'CSRF-Token': _sc_globalCsrf },
+      body: fd
     });
     const data = await resp.json();
     if (data.run_id) runIdInput.value = data.run_id;
@@ -758,7 +823,7 @@ document.addEventListener('DOMContentLoaded', () => {
   el.innerHTML = [
     '<div class="card mb-4">',
     '  <div class="card-header fw-bold"><i class="fas fa-robot me-2"></i>AI Theme Chat</div>',
-    '  <div class="card-body">',
+    '  <div class="card-body" id="bpt-card-body">',
     '    <p class="text-muted small mb-2">Chat with the AI to build your Bootstrap theme. New themes are visible after page reload or when you click Finish.</p>',
     '    <div id="bpt-interactions" style="min-height:80px;max-height:320px;overflow-y:auto;border:1px solid var(--bs-border-color,#dee2e6);padding:10px;margin-bottom:10px;border-radius:4px;background:var(--bs-body-bg,#fff);"></div>',
     '    <div class="d-flex gap-2 align-items-end">',
@@ -766,6 +831,11 @@ document.addEventListener('DOMContentLoaded', () => {
     '      <button type="button" id="bpt-send-btn" class="btn btn-primary" onclick="bptSend()">',
     '        <i id="bpt-send-icon" class="far fa-paper-plane"></i>',
     '      </button>',
+    '    </div>',
+    '    <div class="d-flex align-items-center mt-1 gap-2">',
+    '      <label class="mb-0 text-muted" style="cursor:pointer" for="bpt-file-input" title="Attach image for design inspiration"><i class="fas fa-paperclip"></i></label>',
+    '      <input type="file" id="bpt-file-input" class="d-none" accept="image/*" multiple onchange="bptFileAttach(event)">',
+    '      <span id="bpt-file-label" class="small"></span>',
     '    </div>',
     '    <input type="hidden" id="bpt-run-id" value="">',
     '  </div>',
@@ -780,6 +850,34 @@ document.addEventListener('DOMContentLoaded', () => {
   const inp = document.getElementById('bpt-input');
   inp?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); bptSend(); }
+  });
+  const dropZone = document.getElementById('bpt-card-body');
+  let _dragCtr = 0;
+  dropZone?.addEventListener('dragover', (e) => e.preventDefault());
+  dropZone?.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    _dragCtr++;
+    dropZone.style.outline = '2px dashed var(--bs-primary, #0d6efd)';
+    dropZone.style.outlineOffset = '-4px';
+  });
+  dropZone?.addEventListener('dragleave', () => {
+    _dragCtr--;
+    if (_dragCtr === 0) { dropZone.style.outline = ''; dropZone.style.outlineOffset = ''; }
+  });
+  dropZone?.addEventListener('drop', (e) => {
+    e.preventDefault();
+    _dragCtr = 0;
+    dropZone.style.outline = '';
+    dropZone.style.outlineOffset = '';
+    const imgs = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+    if (imgs.length) bptSetFiles(imgs);
+  });
+  inp?.addEventListener('paste', (e) => {
+    const pasted = Array.from(e.clipboardData?.items || [])
+      .filter(it => it.type.startsWith('image/'))
+      .map(it => it.getAsFile())
+      .filter(Boolean);
+    if (pasted.length) { e.preventDefault(); bptSetFiles(pasted); }
   });
   const submitBtn = form?.querySelector('[type="submit"]');
   const origSubmitHTML = submitBtn ? submitBtn.innerHTML : null;
