@@ -2,8 +2,8 @@ const Plugin = require("@saltcorn/data/models/plugin");
 const { pre, code, div } = require("@saltcorn/markup/tags");
 const db = require("@saltcorn/data/db");
 const { getState } = require("@saltcorn/data/db/state");
-const { join } = require("path");
 const { writeFile, readdir, unlink } = require("fs").promises;
+const { join } = require("path");
 
 const writeOverlayCSS = async (css, filename = `overlay.${Date.now()}.css`) => {
   const dest = join(__dirname, "public", filename);
@@ -71,7 +71,41 @@ Only call set_layout_config when you want to change structural layout, separate 
 WORKFLOW:
 1. Call apply_css_overlay with the complete CSS — this is the only way to deliver CSS.
 2. Optionally call set_layout_config for structural layout changes.
-3. After all tool calls, reply with one short sentence confirming what changed. Never include CSS in your text reply.`;
+3. After apply_css_overlay completes, the tool result JSON may contain a "screenshot" field — a base64-encoded PNG of the live page captured after the CSS was applied. Screenshots are only available when a reference page has been configured (via the "route" parameter) and the environment supports it; if the field is absent or null, skip to step 4 immediately. To read the image, interpret the "screenshot" value as a base64 PNG: decode it visually and assess the rendered page. The "route" parameter only needs to be passed the first time or when the user changes the reference page — the value is stored and reused automatically.
+4. If a screenshot is present, review it: check that colors, fonts, spacing, and contrast match the intended design. If there is a clear problem, call apply_css_overlay with a targeted correction and review the next screenshot. Repeat only while there are clear remaining issues — stop as soon as the result looks good or after at most 3 correction passes, whichever comes first.
+5. Once done, reply with one short sentence confirming what changed. Also state: (a) the page name used for screenshots if one was configured, (b) whether a screenshot was received and used for refinement, or (c) that no screenshot data was returned if the field was absent or null. Never include CSS in your text reply.`;
+
+const capturePageScreenshot = async (req) => {
+  const plugin = await findPlugin();
+  const pageName = plugin?.configuration?.screenshot_page;
+  if (!pageName) return null;
+  const action = getState().actions?.page_to_pdf;
+  if (!action) {
+    getState().log(
+      5,
+      "bootstrap-prompt-theme: page_to_pdf action not available, skipping screenshot"
+    );
+    return null;
+  }
+  try {
+    const referrer =
+      req?.protocol && req?.get?.("host")
+        ? `${req.protocol}://${req.get("host")}/`
+        : getState().getConfig("base_url", "/");
+    const result = await action.run({
+      req,
+      referrer,
+      configuration: { entity_type: "Page", page: pageName, format: "PNG" },
+    });
+    return result?.download?.blob || null;
+  } catch (e) {
+    getState().log(
+      4,
+      `bootstrap-prompt-theme: screenshot failed: ${e.message}`
+    );
+    return null;
+  }
+};
 
 const findPlugin = async () => {
   return (
@@ -117,17 +151,17 @@ class GenerateBootstrapThemeSkill {
             code(css.slice(0, 300) + (css.length > 300 ? "\n..." : ""))
           );
         },
-        process: async ({ css }) => {
+        process: async ({ css, route }, { req }) => {
           const filename = await writeOverlayCSS(css);
           const plugin = await findPlugin();
           if (plugin) {
-            await savePluginConfig(plugin, {
-              overlay_css: css,
-              overlay_file: filename,
-            });
+            const patch = { overlay_css: css, overlay_file: filename };
+            if (route) patch.screenshot_page = route;
+            await savePluginConfig(plugin, patch);
             await deleteOldOverlays(filename);
           }
-          return { filename };
+          const screenshot = await capturePageScreenshot(req);
+          return { filename, screenshot };
         },
         renderToolResponse: async ({ filename }) => {
           return div(
@@ -147,6 +181,11 @@ class GenerateBootstrapThemeSkill {
                 type: "string",
                 description:
                   "Complete valid CSS to write as the overlay. Must start with :root { or a comment. No markdown, no code fences.",
+              },
+              route: {
+                type: "string",
+                description:
+                  "Saltcorn page name to screenshot for visual feedback (e.g. 'home'). Only needed the first time or when changing the reference page — the value is remembered for subsequent calls.",
               },
             },
           },
