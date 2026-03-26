@@ -145,7 +145,11 @@ WORKFLOW:
 2. Optionally call set_layout_config for structural layout changes.
 3. After apply_css_overlay completes, the tool result JSON may contain a "screenshot" field — a base64-encoded PNG of the live page captured after the CSS was applied. Screenshots are only available when a reference page has been configured (via the "route" parameter) and the environment supports it; if the field is absent or null, skip to step 4 immediately. To read the image, interpret the "screenshot" value as a base64 PNG: decode it visually and assess the rendered page. The "route" parameter only needs to be passed the first time or when the user changes the reference page — the value is stored and reused automatically.
 4. If a screenshot is present, review it: check that colors, fonts, spacing, and contrast match the intended design. If there is a clear problem, call apply_css_overlay with a targeted correction and review the next screenshot. Repeat only while there are clear remaining issues — stop as soon as the result looks good or after at most 3 correction passes, whichever comes first.
-5. Once done, reply with one short sentence confirming what changed. Also state: (a) the page name used for screenshots if one was configured, (b) whether a screenshot was received and used for refinement, or (c) that no screenshot data was returned if the field was absent or null. Never include CSS in your text reply.`;
+5. Once done, reply with one short sentence confirming what changed. Then report on the screenshot status — be specific, not generic:
+   - If a screenshot was received and used for refinement: say which page was used and that visual feedback was applied.
+   - If a route was configured but the screenshot field was absent or null: say that the screenshot for that page failed or returned no data.
+   - If no route was configured at all: add a short note that the user can specify a page name via the "route" parameter in their next request to enable visual feedback.
+   Never include CSS in your text reply.`;
 
 const capturePageScreenshot = async (req) => {
   const plugin = await findPlugin();
@@ -257,7 +261,7 @@ class GenerateBootstrapThemeSkill {
               route: {
                 type: "string",
                 description:
-                  "Saltcorn page name to screenshot for visual feedback (e.g. 'home'). Only needed the first time or when changing the reference page — the value is remembered for subsequent calls.",
+                  "Saltcorn page name to use for visual feedback screenshots. Only pass this when the user has explicitly named a page. Do not guess or default to any page name. Once set, the value is remembered — only pass it again when the user specifies a different page.",
               },
             },
           },
