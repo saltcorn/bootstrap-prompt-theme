@@ -68,6 +68,78 @@ LAYOUT CONFIG: Besides CSS, you can control structural layout options via set_la
 - in_card: true | false — wrap page body in a Bootstrap card
 Only call set_layout_config when you want to change structural layout, separate from CSS. Call both tools when a request requires both structural and CSS changes.
 
+PAGE STRUCTURE: A typical rendered Saltcorn page looks like this (abridged). Use it to understand element hierarchy, class names, and selectors when writing CSS:
+\`\`\`html
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="/plugins/public/bootstrap-prompt-theme/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/plugins/public/bootstrap-prompt-theme/sidebar-3.css">
+  <link rel="stylesheet" href="/plugins/public/bootstrap-prompt-theme/overlay.css">
+  <link href="/static_assets/.../saltcorn.css" rel="stylesheet">
+  <script>var _sc_globalCsrf = "<csrf-token>", _sc_version_tag = "...", _sc_lightmode = "light";</script>
+</head>
+<body id="page-top" class="page_<pagename>">
+  <div id="wrapper">
+    <nav class="navbar d-print-none navbar-expand-md navbar-light bg-light" id="mainNav">
+      <div class="container">
+        <a class="navbar-brand" href="/">Saltcorn</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarResponsive">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarResponsive">
+          <ul class="navbar-nav ms-auto my-2 my-lg-0">
+            <li class="nav-item"><a class="nav-link" href="/table">Tables</a></li>
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">Settings</a>
+              <div class="dropdown-menu">
+                <a class="dropdown-item" href="/admin">About application</a>
+                <a class="dropdown-item" href="/plugins">Modules</a>
+              </div>
+            </li>
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle user-nav-section" href="#" data-bs-toggle="dropdown">User</a>
+              <div class="dropdown-menu dropdown-menu-end">
+                <a class="dropdown-item" href="/auth/settings">User settings</a>
+                <a class="dropdown-item" href="/auth/logout">Logout</a>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <div id="page-inner-content">
+      <section class="page-section pt-2">
+        <div class="container">
+          <!-- admin edit bar (admin only) -->
+          <div class="card p-1 mt-1 mb-3 d-print-none admin-edit-bar">
+            <div class="card-body p-1">...</div>
+          </div>
+        </div>
+      </section>
+      <section class="page-section">
+        <div class="container">
+          <!-- page content, e.g. a table view -->
+          <div class="table-responsive">
+            <table class="table table-sm table-valign-middle">
+              <thead><tr><th>Email</th><th>Role</th></tr></thead>
+              <tbody><tr><td>admin@foo.com</td><td>1</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      <section class="page-section">
+        <div class="container">
+          <div id="toasts-area" class="toast-container position-fixed top-0 end-0 p-2" style="z-index: 9999;"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</body>
+</html>
+\`\`\`
+
 WORKFLOW:
 1. Call apply_css_overlay with the complete CSS — this is the only way to deliver CSS.
 2. Optionally call set_layout_config for structural layout changes.
