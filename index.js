@@ -928,6 +928,65 @@ document.addEventListener('DOMContentLoaded', () => {
     ],
   });
 
+const FAKE_MENU = [
+  {
+    section: "Main",
+    items: [
+      { label: "Tables", link: "/table" },
+      { label: "Views", link: "/viewedit" },
+      { label: "Pages", link: "/pageedit" },
+      {
+        label: "Settings",
+        subitems: [
+          { label: "About application", link: "/admin" },
+          { label: "Modules", link: "/plugins" },
+          { label: "Users and security", link: "/useradmin" },
+        ],
+      },
+      {
+        label: "User",
+        subitems: [
+          { label: "User settings", link: "/auth/settings" },
+          { label: "Logout", link: "/auth/logout" },
+        ],
+      },
+    ],
+  },
+];
+
+const FAKE_LIST_BODY =
+  '<section class="page-section pt-2"><div class="container">' +
+  '<div class="table-responsive"><table class="table table-sm table-valign-middle">' +
+  "<thead><tr>" +
+  '<th><span class="link-style">Email</span></th>' +
+  '<th class="text-align-right"><span class="link-style">Role</span></th>' +
+  "</tr></thead>" +
+  '<tbody><tr data-row-id="1"><td>admin@foo.com</td><td class="text-align-right">1</td></tr></tbody>' +
+  "</table></div>" +
+  "</div></section>";
+
+const renderStructureSkeleton = (config) =>
+  menuWrap({
+    brand: { name: "Brand" },
+    menu: FAKE_MENU,
+    config,
+    currentUrl: "/",
+    originalUrl: "/",
+    body: '<section class="page-section pt-2"><div class="container"><p><!-- page content --></p></div></section>',
+    req: null,
+  });
+
+const renderPageSkeleton = (config) =>
+  menuWrap({
+    brand: { name: "Brand" },
+    menu: FAKE_MENU,
+    config,
+    currentUrl: "/",
+    originalUrl: "/",
+    body: FAKE_LIST_BODY,
+    req: null,
+  });
+
 module.exports = {
   sc_plugin_api_version: 1,
   plugin_name: "bootstrap-prompt-theme",
@@ -980,4 +1039,6 @@ module.exports = {
     }
   },
   ready_for_mobile: true,
+  renderStructureSkeleton,
+  renderPageSkeleton,
 };
