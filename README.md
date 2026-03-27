@@ -30,6 +30,18 @@ This variant generates a lightweight CSS overlay by chatting with an LLM. Bootst
 
 The chat history is persisted across page reloads, so you can return to the configuration page and pick up where you left off.
 
+### Visual feedback
+
+If the `@saltcorn/page-to-pdf` plugin is installed, the AI can capture a screenshot of a live page after each CSS change and use it to self-correct. To enable this, mention a page name in your message:
+
+```
+You:      A dark cyberpunk theme. Use the "dashboard" page for visual feedback.
+
+AI:       [applies CSS overlay, captures screenshot, refines if needed]
+```
+
+The page name is remembered for the rest of the conversation — you only need to mention it once. The AI will tell you whether a screenshot was received and used for refinement, or explain if it failed.
+
 ### Example conversation
 
 ```

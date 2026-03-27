@@ -2,8 +2,8 @@ const Plugin = require("@saltcorn/data/models/plugin");
 const { pre, code, div } = require("@saltcorn/markup/tags");
 const db = require("@saltcorn/data/db");
 const { getState } = require("@saltcorn/data/db/state");
-const { join } = require("path");
 const { writeFile, readdir, unlink } = require("fs").promises;
+const { join } = require("path");
 
 const writeOverlayCSS = async (css, filename = `overlay.${Date.now()}.css`) => {
   const dest = join(__dirname, "public", filename);
@@ -68,10 +68,124 @@ LAYOUT CONFIG: Besides CSS, you can control structural layout options via set_la
 - in_card: true | false — wrap page body in a Bootstrap card
 Only call set_layout_config when you want to change structural layout, separate from CSS. Call both tools when a request requires both structural and CSS changes.
 
+PAGE STRUCTURE: A typical rendered Saltcorn page looks like this (abridged). Use it to understand element hierarchy, class names, and selectors when writing CSS:
+\`\`\`html
+<html lang="en" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="/plugins/public/bootstrap-prompt-theme/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/plugins/public/bootstrap-prompt-theme/sidebar-3.css">
+  <link rel="stylesheet" href="/plugins/public/bootstrap-prompt-theme/overlay.css">
+  <link href="/static_assets/.../saltcorn.css" rel="stylesheet">
+  <script>var _sc_globalCsrf = "<csrf-token>", _sc_version_tag = "...", _sc_lightmode = "light";</script>
+</head>
+<body id="page-top" class="page_<pagename>">
+  <div id="wrapper">
+    <nav class="navbar d-print-none navbar-expand-md navbar-light bg-light" id="mainNav">
+      <div class="container">
+        <a class="navbar-brand" href="/">Saltcorn</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarResponsive">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarResponsive">
+          <ul class="navbar-nav ms-auto my-2 my-lg-0">
+            <li class="nav-item"><a class="nav-link" href="/table">Tables</a></li>
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">Settings</a>
+              <div class="dropdown-menu">
+                <a class="dropdown-item" href="/admin">About application</a>
+                <a class="dropdown-item" href="/plugins">Modules</a>
+              </div>
+            </li>
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle user-nav-section" href="#" data-bs-toggle="dropdown">User</a>
+              <div class="dropdown-menu dropdown-menu-end">
+                <a class="dropdown-item" href="/auth/settings">User settings</a>
+                <a class="dropdown-item" href="/auth/logout">Logout</a>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <div id="page-inner-content">
+      <section class="page-section pt-2">
+        <div class="container">
+          <!-- admin edit bar (admin only) -->
+          <div class="card p-1 mt-1 mb-3 d-print-none admin-edit-bar">
+            <div class="card-body p-1">...</div>
+          </div>
+        </div>
+      </section>
+      <section class="page-section">
+        <div class="container">
+          <!-- page content, e.g. a table view -->
+          <div class="table-responsive">
+            <table class="table table-sm table-valign-middle">
+              <thead><tr><th>Email</th><th>Role</th></tr></thead>
+              <tbody><tr><td>admin@foo.com</td><td>1</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      <section class="page-section">
+        <div class="container">
+          <div id="toasts-area" class="toast-container position-fixed top-0 end-0 p-2" style="z-index: 9999;"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</body>
+</html>
+\`\`\`
+
 WORKFLOW:
 1. Call apply_css_overlay with the complete CSS — this is the only way to deliver CSS.
 2. Optionally call set_layout_config for structural layout changes.
-3. After all tool calls, reply with one short sentence confirming what changed. Never include CSS in your text reply.`;
+3. After apply_css_overlay completes, the tool result JSON may contain a "screenshot" field — a base64-encoded PNG of the live page captured after the CSS was applied. Screenshots are only available when a reference page has been configured (via the "route" parameter) and the environment supports it; if the field is absent or null, skip to step 4 immediately. To read the image, interpret the "screenshot" value as a base64 PNG: decode it visually and assess the rendered page. The "route" parameter only needs to be passed the first time or when the user changes the reference page — the value is stored and reused automatically.
+4. If a screenshot is present, review it: check that colors, fonts, spacing, and contrast match the intended design. If there is a clear problem, call apply_css_overlay with a targeted correction and review the next screenshot. Repeat only while there are clear remaining issues — stop as soon as the result looks good or after at most 3 correction passes, whichever comes first.
+5. Once done, reply with one short sentence confirming what changed. Then report on the screenshot status — be specific, not generic:
+   - If a screenshot was received and used for refinement: say which page was used and that visual feedback was applied.
+   - If a route was configured but the screenshot field was absent or null: say that the screenshot for that page failed or returned no data.
+   - If no route was configured at all: add a short note that the user can specify a page name via the "route" parameter in their next request to enable visual feedback.
+   Never include CSS in your text reply.`;
+
+const capturePageScreenshot = async (req) => {
+  const plugin = await findPlugin();
+  const pageName = plugin?.configuration?.screenshot_page;
+  if (!pageName) return null;
+  const action = getState().actions?.page_to_pdf;
+  if (!action) {
+    getState().log(
+      5,
+      "bootstrap-prompt-theme: page_to_pdf action not available, skipping screenshot"
+    );
+    return null;
+  }
+  try {
+    const base =
+      req?.protocol && req?.get?.("host")
+        ? `${req.protocol}://${req.get("host")}`
+        : getState().getConfig("base_url", "").replace(/\/$/, "");
+    const result = await action.run({
+      req,
+      referrer: base + "/",
+      configuration: {
+        entity_type: "URL",
+        url: `${base}/page/${pageName}`,
+        format: "PNG",
+      },
+    });
+    return result?.download?.blob || null;
+  } catch (e) {
+    getState().log(
+      4,
+      `bootstrap-prompt-theme: screenshot failed: ${e.message}`
+    );
+    return null;
+  }
+};
 
 const findPlugin = async () => {
   return (
@@ -117,17 +231,17 @@ class GenerateBootstrapThemeSkill {
             code(css.slice(0, 300) + (css.length > 300 ? "\n..." : ""))
           );
         },
-        process: async ({ css }) => {
+        process: async ({ css, route }, { req }) => {
           const filename = await writeOverlayCSS(css);
           const plugin = await findPlugin();
           if (plugin) {
-            await savePluginConfig(plugin, {
-              overlay_css: css,
-              overlay_file: filename,
-            });
+            const patch = { overlay_css: css, overlay_file: filename };
+            if (route) patch.screenshot_page = route;
+            await savePluginConfig(plugin, patch);
             await deleteOldOverlays(filename);
           }
-          return { filename };
+          const screenshot = await capturePageScreenshot(req);
+          return { filename, screenshot };
         },
         renderToolResponse: async ({ filename }) => {
           return div(
@@ -147,6 +261,11 @@ class GenerateBootstrapThemeSkill {
                 type: "string",
                 description:
                   "Complete valid CSS to write as the overlay. Must start with :root { or a comment. No markdown, no code fences.",
+              },
+              route: {
+                type: "string",
+                description:
+                  "Saltcorn page name to use for visual feedback screenshots. Only pass this when the user has explicitly named a page. Do not guess or default to any page name. Once set, the value is remembered — only pass it again when the user specifies a different page.",
               },
             },
           },
