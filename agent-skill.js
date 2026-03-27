@@ -164,14 +164,18 @@ const capturePageScreenshot = async (req) => {
     return null;
   }
   try {
-    const referrer =
+    const base =
       req?.protocol && req?.get?.("host")
-        ? `${req.protocol}://${req.get("host")}/`
-        : getState().getConfig("base_url", "/");
+        ? `${req.protocol}://${req.get("host")}`
+        : getState().getConfig("base_url", "").replace(/\/$/, "");
     const result = await action.run({
       req,
-      referrer,
-      configuration: { entity_type: "Page", page: pageName, format: "PNG" },
+      referrer: base + "/",
+      configuration: {
+        entity_type: "URL",
+        url: `${base}/page/${pageName}`,
+        format: "PNG",
+      },
     });
     return result?.download?.blob || null;
   } catch (e) {
