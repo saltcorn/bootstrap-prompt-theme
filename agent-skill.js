@@ -67,78 +67,9 @@ LAYOUT CONFIG: Besides CSS, you can control structural layout options via set_la
 - top_pad: 0–5 — Bootstrap spacing scale for top padding on page sections
 - in_card: true | false — wrap page body in a Bootstrap card
 Only call set_layout_config when you want to change structural layout, separate from CSS. Call both tools when a request requires both structural and CSS changes.
+When you change menu_style, the tool response will include a page_structure field with rendered HTML of the new layout. Read it to understand the actual element hierarchy and CSS selectors before writing any CSS for that layout.
 
-PAGE STRUCTURE: A typical rendered Saltcorn page looks like this (abridged). Use it to understand element hierarchy, class names, and selectors when writing CSS:
-\`\`\`html
-<html lang="en" data-bs-theme="light">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link href="/plugins/public/bootstrap-prompt-theme/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="/plugins/public/bootstrap-prompt-theme/sidebar-3.css">
-  <link rel="stylesheet" href="/plugins/public/bootstrap-prompt-theme/overlay.css">
-  <link href="/static_assets/.../saltcorn.css" rel="stylesheet">
-  <script>var _sc_globalCsrf = "<csrf-token>", _sc_version_tag = "...", _sc_lightmode = "light";</script>
-</head>
-<body id="page-top" class="page_<pagename>">
-  <div id="wrapper">
-    <nav class="navbar d-print-none navbar-expand-md navbar-light bg-light" id="mainNav">
-      <div class="container">
-        <a class="navbar-brand" href="/">Saltcorn</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarResponsive">
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarResponsive">
-          <ul class="navbar-nav ms-auto my-2 my-lg-0">
-            <li class="nav-item"><a class="nav-link" href="/table">Tables</a></li>
-            <li class="nav-item dropdown">
-              <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">Settings</a>
-              <div class="dropdown-menu">
-                <a class="dropdown-item" href="/admin">About application</a>
-                <a class="dropdown-item" href="/plugins">Modules</a>
-              </div>
-            </li>
-            <li class="nav-item dropdown">
-              <a class="nav-link dropdown-toggle user-nav-section" href="#" data-bs-toggle="dropdown">User</a>
-              <div class="dropdown-menu dropdown-menu-end">
-                <a class="dropdown-item" href="/auth/settings">User settings</a>
-                <a class="dropdown-item" href="/auth/logout">Logout</a>
-              </div>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </nav>
-    <div id="page-inner-content">
-      <section class="page-section pt-2">
-        <div class="container">
-          <!-- admin edit bar (admin only) -->
-          <div class="card p-1 mt-1 mb-3 d-print-none admin-edit-bar">
-            <div class="card-body p-1">...</div>
-          </div>
-        </div>
-      </section>
-      <section class="page-section">
-        <div class="container">
-          <!-- page content, e.g. a table view -->
-          <div class="table-responsive">
-            <table class="table table-sm table-valign-middle">
-              <thead><tr><th>Email</th><th>Role</th></tr></thead>
-              <tbody><tr><td>admin@foo.com</td><td>1</td></tr></tbody>
-            </table>
-          </div>
-        </div>
-      </section>
-      <section class="page-section">
-        <div class="container">
-          <div id="toasts-area" class="toast-container position-fixed top-0 end-0 p-2" style="z-index: 9999;"></div>
-        </div>
-      </section>
-    </div>
-  </div>
-</body>
-</html>
-\`\`\`
+{{PAGE_STRUCTURE}}
 
 WORKFLOW:
 1. Call apply_css_overlay with the complete CSS — this is the only way to deliver CSS.
@@ -203,6 +134,18 @@ const savePluginConfig = async (plugin, patch) => {
   });
 };
 
+const renderStructureSkeleton = (config) => {
+  try {
+    return require(join(__dirname, "index.js")).renderStructureSkeleton(config);
+  } catch (e) {
+    getState().log(
+      4,
+      `bootstrap-prompt-theme: renderStructureSkeleton failed: ${e.message}`
+    );
+    return null;
+  }
+};
+
 class GenerateBootstrapThemeSkill {
   static skill_name = "Generate Bootstrap Theme";
 
@@ -218,8 +161,26 @@ class GenerateBootstrapThemeSkill {
     return [];
   }
 
-  systemPrompt() {
-    return SYSTEM_PROMPT;
+  async systemPrompt() {
+    const plugin = await findPlugin();
+    const config = plugin?.configuration || {};
+    let pageStructure =
+      "PAGE STRUCTURE: (unavailable — could not render current layout)";
+    try {
+      const { renderPageSkeleton } = require(join(__dirname, "index.js"));
+      const html = renderPageSkeleton(config);
+      if (html)
+        pageStructure =
+          "PAGE STRUCTURE: The current page renders like this (with a sample list view, based on the active layout config). Use it to understand element hierarchy, class names, and selectors when writing CSS:\n```html\n" +
+          html +
+          "\n```";
+    } catch (e) {
+      getState().log(
+        4,
+        `bootstrap-prompt-theme: systemPrompt renderPageSkeleton failed: ${e.message}`
+      );
+    }
+    return SYSTEM_PROMPT.replace("{{PAGE_STRUCTURE}}", pageStructure);
   }
 
   provideTools() {
@@ -281,30 +242,41 @@ class GenerateBootstrapThemeSkill {
           return pre(code(entries));
         },
         process: async (params) => {
+          const allowed = [
+            "mode",
+            "menu_style",
+            "colorscheme",
+            "fixed_top",
+            "fluid",
+            "top_pad",
+            "in_card",
+          ];
+          const patch = Object.fromEntries(
+            Object.entries(params).filter(([k]) => allowed.includes(k))
+          );
           const plugin = await findPlugin();
           if (plugin) {
-            const allowed = [
-              "mode",
-              "menu_style",
-              "colorscheme",
-              "fixed_top",
-              "fluid",
-              "top_pad",
-              "in_card",
-            ];
-            const patch = Object.fromEntries(
-              Object.entries(params).filter(([k]) => allowed.includes(k))
-            );
             await savePluginConfig(plugin, patch);
           }
-          return { success: true };
+          const result = { success: true };
+          if (params.menu_style) {
+            const mergedConfig = { ...(plugin?.configuration || {}), ...patch };
+            result.page_structure = renderStructureSkeleton(mergedConfig);
+          }
+          return result;
         },
-        renderToolResponse: async () =>
-          div({ class: "text-success" }, "Layout configuration updated."),
+        renderToolResponse: async ({ page_structure }) =>
+          div(
+            { class: "text-success" },
+            "Layout configuration updated.",
+            page_structure
+              ? pre({ class: "mt-2 small" }, code(page_structure))
+              : ""
+          ),
         function: {
           name: "set_layout_config",
           description:
-            "Set structural layout configuration for the Saltcorn UI. Only pass the parameters you want to change.",
+            "Set structural layout configuration for the Saltcorn UI. Only pass the parameters you want to change. When menu_style is set, the tool response includes a page_structure field containing rendered HTML of the new layout — use it to understand the correct selectors before writing CSS.",
           parameters: {
             type: "object",
             properties: {
