@@ -954,16 +954,69 @@ const FAKE_MENU = [
   },
 ];
 
-const FAKE_LIST_BODY =
-  '<section class="page-section pt-2"><div class="container">' +
-  '<div class="table-responsive"><table class="table table-sm table-valign-middle">' +
-  "<thead><tr>" +
-  '<th><span class="link-style">Email</span></th>' +
-  '<th class="text-align-right"><span class="link-style">Role</span></th>' +
-  "</tr></thead>" +
-  '<tbody><tr data-row-id="1"><td>admin@foo.com</td><td class="text-align-right">1</td></tr></tbody>' +
-  "</table></div>" +
-  "</div></section>";
+const FAKE_LIST_BODY = `
+<section class="page-section pt-2"><div class="container">
+  <div class="card p-1 mt-1 mb-3 d-print-none admin-edit-bar"><div class="card-body p-1">
+    <i class="fas fa-user-cog me-1"></i>
+    <span class="ms-1 me-2 badge bg-secondary">Page</span>
+    <span class="copy-to-clipboard">books_with_edit</span>
+    <a class="ms-2" href="/pageedit/edit/books_with_edit">Edit&nbsp;<i class="fas fa-edit"></i></a>
+  </div></div>
+</div></section>
+<section class="page-section"><div class="container">
+  <div class="d-inline" data-sc-embed-viewname="my_bread">
+    <div class="container"><nav aria-label="breadcrumb"><ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="/settings">Settings</a></li>
+      <li class="breadcrumb-item"><a href="/admin">About application</a></li>
+      <li class="breadcrumb-item active" aria-current="page">Site identity</li>
+    </ol></nav></div>
+  </div>
+</div></section>
+<section class="page-section"><div class="container">
+  <div class="d-inline" data-sc-embed-viewname="books">
+    <div class="table-responsive"><table class="table table-sm table-valign-middle table-hover">
+      <thead><tr>
+        <th><span class="link-style">name</span></th>
+        <th><span class="link-style">open</span></th>
+        <th class="text-align-right"><span class="link-style">pages</span></th>
+      </tr></thead>
+      <tbody>
+        <tr data-row-id="2">
+          <td>War and Peace</td>
+          <td><i class="fas fa-lg fa-times-circle text-danger"></i></td>
+          <td class="text-align-right">1000</td>
+        </tr>
+      </tbody>
+    </table></div>
+  </div>
+</div></section>
+<section class="page-section"><div class="container">
+  <div class="d-inline" data-sc-embed-viewname="edit_book">
+    <form data-viewname="edit_book" action="/view/edit_book" class="form-namespace" method="post">
+      <input type="hidden" name="_csrf" value="<csrf-token>">
+      <input type="hidden" class="form-control" name="id" value="2">
+      <span style="margin-bottom:1.5rem"><div class="row" style="margin-bottom:1.5rem">
+        <div class="col-md-2 text-start text-lg-end"><label for="inputname">name</label></div>
+        <div class="col-md-10 text-start"><input type="text" class="form-control" data-fieldname="name" name="name" id="inputname" value="War and Peace"></div>
+      </div></span>
+      <span style="margin-bottom:1.5rem"><div class="row" style="margin-bottom:1.5rem">
+        <div class="col-md-2 text-start text-lg-end"><label for="inputopen">open</label></div>
+        <div class="col-md-10 text-start"><input class="me-2 mt-1" data-fieldname="open" type="checkbox" name="open" id="inputopen"></div>
+      </div></span>
+      <span style="margin-bottom:1.5rem"><div class="row" style="margin-bottom:1.5rem">
+        <div class="col-md-2 text-start text-lg-end"><label for="inputpages">pages</label></div>
+        <div class="col-md-10 text-start"><input type="number" class="form-control" data-fieldname="pages" name="pages" id="inputpages" step="1" value="1000"></div>
+      </div></span>
+      <span style="margin-bottom:1.5rem"><div class="row" style="margin-bottom:1.5rem">
+        <div class="col-2 text-end"></div>
+        <div class="col-10 text-start"><button type="submit" class="btn btn-primary">Save</button></div>
+      </div></span>
+    </form>
+  </div>
+</div></section>
+<section class="page-section"><div class="container">
+  <div id="toasts-area" class="toast-container position-fixed top-0 end-0 p-2" style="z-index:9999;" aria-live="polite" aria-atomic="true"></div>
+</div></section>`;
 
 const renderStructureSkeleton = (config) =>
   menuWrap({
